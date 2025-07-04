@@ -6,8 +6,8 @@ const config = {
     version: '0.0.1',
 
     type: Phaser.AUTO,
-    width: 9800,  // ancho igual al de la imagen de fondo
-    height: 700,  // alto igual al de la imagen de fondo
+    width: window.innerWidth,   // Ancho total de la ventana
+    height: window.innerHeight, // Alto total de la ventana
     parent: 'contenedor',
     pixelArt: true,
     backgroundColor: '#37861e',
@@ -18,7 +18,17 @@ const config = {
         background: ['#16a085', '#2ecc71', '#e74c3c', '#000000']
     },
 
-    scene: [Boot]
+    scene: [Boot],
+
+    scale: {
+        mode: Phaser.Scale.RESIZE, // Permite que el juego se ajuste dinámicamente
+        autoCenter: Phaser.Scale.CENTER_BOTH // Centra el canvas en la pantalla
+    }
 };
 
 const game = new Phaser.Game(config);
+
+// Opcional: Actualizar tamaño del juego cuando cambie la ventana
+window.addEventListener('resize', () => {
+    game.scale.resize(window.innerWidth, window.innerHeight);
+});
