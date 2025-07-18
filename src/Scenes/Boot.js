@@ -2,7 +2,8 @@ class Bootloader extends Phaser.Scene {
     constructor() {
         super({ key: 'Bootloader' });
         this.lastBlackHoleDamage = {};
-        this.juegoTerminado = false; // bandera para detener el juego al morir un jugador
+        this.juegoTerminado = false;
+        this.sonidoHoyonegroActivo = { player1: false, player2: false };
     }
 
     preload() {
@@ -14,10 +15,28 @@ class Bootloader extends Phaser.Scene {
         this.load.image('obstaculo1', 'satelite1.png');
         this.load.image('obstaculo2', 'satelite2.png');
         this.load.image('blackhole', 'hoyo_negro.png');
+        this.load.audio('musicaFondo', 'musica.mp3');
+        this.load.audio('Casteroide', 'Golpe.mp3');
+        this.load.audio('Cplayer', 'Metal.mp3');
+        this.load.audio('Shoyonegro', 'Shoyonegro.mp3');
     }
 
     create() {
         this.fondo = this.add.tileSprite(0, 0, this.cameras.main.width, this.cameras.main.height, 'fondo').setOrigin(0);
+
+        this.musica = this.sound.add('musicaFondo', { loop: true, volume: 0.3 });
+        this.musica.play();
+
+        window.addEventListener('blur', () => {
+            if (this.musica && this.musica.isPlaying) {
+                this.musica.pause();
+            }
+        });
+        window.addEventListener('focus', () => {
+            if (this.musica && this.musica.isPaused) {
+                this.musica.resume();
+            }
+        });
 
         this.player = this.add.image(130, 170, 'player').setScale(0.05).setOrigin(0).setFlipX(true).setRotation(Math.PI / 2);
         this.player2 = this.add.image(300, 170, 'player2').setScale(0.05).setOrigin(0).setFlipX(true).setRotation(Math.PI / 2);
@@ -60,65 +79,95 @@ class Bootloader extends Phaser.Scene {
         this.time.addEvent({ delay: 2000, loop: true, callback: this.generarAsteroide, callbackScope: this });
         this.time.addEvent({ delay: 3000, loop: true, callback: this.generarObstaculo, callbackScope: this });
         this.time.addEvent({ delay: 15000, loop: true, callback: this.generarBlackHole, callbackScope: this });
+
+        this.sfxCasteroide = this.sound.add('Casteroide', { volume: 0.5 });
+        this.sfxCplayer = this.sound.add('Cplayer', { volume: 0.7 });
+        this.sfxHoyonegro = this.sound.add('Shoyonegro', { loop: true, volume: 1.5 });
     }
 
     update(time) {
-        if (this.juegoTerminado) return; // detiene todo si el juego terminó
+        if (this.juegoTerminado) return;
 
         this.fondo.tilePositionX += this.velocidadFondo;
 
         this.blackHoles.getChildren().forEach(hole => {
             hole.x -= this.velocidadFondo;
             hole.rotation += hole.velRot;
-
             if (hole.x < -50) hole.destroy();
-
-            if (this.player && Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), hole.getBounds())) {
-                this.aplicarFuerza(this.player, hole);
-                this.danoBlackHole(this.player, 'vida1');
-            }
-            if (this.player2 && Phaser.Geom.Intersects.RectangleToRectangle(this.player2.getBounds(), hole.getBounds())) {
-                this.aplicarFuerza(this.player2, hole);
-                this.danoBlackHole(this.player2, 'vida2');
-            }
         });
+
+        // Player 1 black hole logic
+        const player1InHole = this.blackHoles.getChildren().some(hole => Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), hole.getBounds()));
+        if (player1InHole) {
+            const hole = this.blackHoles.getChildren().find(hole => Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), hole.getBounds()));
+            this.aplicarFuerza(this.player, hole);
+            this.danoBlackHole(this.player, 'vida1');
+            if (!this.sonidoHoyonegroActivo.player1) {
+                this.sfxHoyonegro.stop();
+                this.sfxHoyonegro.play({ seek: 0 });
+                this.sonidoHoyonegroActivo.player1 = true;
+            }
+        } else {
+            if (this.sonidoHoyonegroActivo.player1) {
+                this.sfxHoyonegro.stop();
+                this.sonidoHoyonegroActivo.player1 = false;
+            }
+        }
+
+        // Player 2 black hole logic
+        const player2InHole = this.blackHoles.getChildren().some(hole => Phaser.Geom.Intersects.RectangleToRectangle(this.player2.getBounds(), hole.getBounds()));
+        if (player2InHole) {
+            const hole = this.blackHoles.getChildren().find(hole => Phaser.Geom.Intersects.RectangleToRectangle(this.player2.getBounds(), hole.getBounds()));
+            this.aplicarFuerza(this.player2, hole);
+            this.danoBlackHole(this.player2, 'vida2');
+            if (!this.sonidoHoyonegroActivo.player2) {
+                this.sfxHoyonegro.stop();
+                this.sfxHoyonegro.play({ seek: 0 });
+                this.sonidoHoyonegroActivo.player2 = true;
+            }
+        } else {
+            if (this.sonidoHoyonegroActivo.player2) {
+                this.sfxHoyonegro.stop();
+                this.sonidoHoyonegroActivo.player2 = false;
+            }
+        }
 
         this.asteroides.getChildren().forEach(ast => {
             ast.y += ast.velY;
             ast.rotation += ast.velRot;
-
             if (ast.y < -50 || ast.y > this.cameras.main.height + 50) ast.destroy();
-
             if (this.player && Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), ast.getBounds())) {
                 this.vida1 = Math.max(0, this.vida1 - ast.danio);
                 this.dibujarBarrasVida();
                 this.verificarMuerte();
                 ast.destroy();
+                this.sfxCasteroide.play();
             }
             if (this.player2 && Phaser.Geom.Intersects.RectangleToRectangle(this.player2.getBounds(), ast.getBounds())) {
                 this.vida2 = Math.max(0, this.vida2 - ast.danio);
                 this.dibujarBarrasVida();
                 this.verificarMuerte();
                 ast.destroy();
+                this.sfxCasteroide.play();
             }
         });
 
         this.obstaculos.getChildren().forEach(ob => {
             ob.x -= this.velocidadFondo;
-
             if (ob.x < -50) ob.destroy();
-
             if (this.player && Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), ob.getBounds())) {
                 this.vida1 = Math.max(0, this.vida1 - ob.danio);
                 this.dibujarBarrasVida();
                 this.verificarMuerte();
                 ob.destroy();
+                this.sfxCasteroide.play();
             }
             if (this.player2 && Phaser.Geom.Intersects.RectangleToRectangle(this.player2.getBounds(), ob.getBounds())) {
                 this.vida2 = Math.max(0, this.vida2 - ob.danio);
                 this.dibujarBarrasVida();
                 this.verificarMuerte();
                 ob.destroy();
+                this.sfxCasteroide.play();
             }
         });
 
@@ -142,6 +191,7 @@ class Bootloader extends Phaser.Scene {
                 this.dibujarBarrasVida();
                 this.tiempoUltimaColision = time;
                 this.verificarMuerte();
+                this.sfxCplayer.play();
             }
         }
     }
@@ -150,7 +200,6 @@ class Bootloader extends Phaser.Scene {
         const x = Phaser.Math.Between(100, this.cameras.main.width - 100);
         const saleDesdeArriba = Phaser.Math.Between(0, 1) === 0;
         const y = saleDesdeArriba ? -50 : this.cameras.main.height + 50;
-
         const escalaBase = Phaser.Math.FloatBetween(0.03, 0.08);
         const escala = escalaBase * 2;
 
@@ -195,7 +244,7 @@ class Bootloader extends Phaser.Scene {
     }
 
     danoBlackHole(player, vidaProp) {
-        if (this.juegoTerminado) return; // no hacer daño si juego terminó
+        if (this.juegoTerminado) return;
         const now = this.time.now;
         if (!this.lastBlackHoleDamage[player.texture.key] || now - this.lastBlackHoleDamage[player.texture.key] >= 1000) {
             this[vidaProp] = Math.max(0, this[vidaProp] - 1);
@@ -233,24 +282,25 @@ class Bootloader extends Phaser.Scene {
             this.player.destroy();
             this.player = null;
             this.mostrarFinDelJuego(this.vida2 > 0 ? "¡Jugador 2 gana!" : "¡Empate!");
-            this.juegoTerminado = true; // bloquear juego
+            this.juegoTerminado = true;
         }
         if (this.vida2 <= 0 && this.player2) {
             this.player2.destroy();
             this.player2 = null;
             this.mostrarFinDelJuego(this.vida1 > 0 ? "¡Jugador 1 gana!" : "¡Empate!");
-            this.juegoTerminado = true; // bloquear juego
+            this.juegoTerminado = true;
         }
     }
 
     mostrarFinDelJuego(msg) {
-        // Fondo oscuro
+        if (this.musica) {
+            this.musica.stop();
+        }
+
         this.add.rectangle(this.cameras.main.centerX, this.cameras.main.centerY, this.cameras.main.width, this.cameras.main.height, 0x000000, 0.6).setDepth(100);
 
-        // Texto de ganador
         this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 100, msg, { fontSize: '32px', fill: '#fff' }).setOrigin(0.5).setDepth(100);
 
-        // Botón reiniciar
         const btnReiniciar = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'Volver a jugar', {
             fontSize: '28px',
             fill: '#0f0',
@@ -259,7 +309,6 @@ class Bootloader extends Phaser.Scene {
         }).setOrigin(0.5).setInteractive().setDepth(100);
         btnReiniciar.on('pointerdown', () => this.scene.restart());
 
-        // Botón salir
         const btnSalir = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY + 60, 'Salir', {
             fontSize: '28px',
             fill: '#f00',
